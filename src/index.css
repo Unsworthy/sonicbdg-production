@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Rajdhani', sans-serif;
+    background: #0A0A0A;
+    color: white;
+  }
+}
+
+@layer components {
+  .bebas {
+    font-family: 'Bebas Neue', cursive;
+  }
+
+  .glow-yellow {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+  }
+
+  .glow-yellow-strong {
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.5), 0 0 60px rgba(255, 215, 0, 0.2);
+  }
+
+  .hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(255, 215, 0, 0.4);
+  }
+
+  .text-outline {
+    text-shadow:
+      2px 2px 0 #000,
+      -2px -2px 0 #000,
+      2px -2px 0 #000,
+      -2px 2px 0 #000,
+      0 0 20px rgba(255, 215, 0, 0.5);
+  }
+
+  .racing-border {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .racing-border::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.4), transparent);
+    animation: racing-border-move 3s linear infinite;
+    pointer-events: none;
+  }
+
+  .racing-stripes {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 30px,
+      rgba(255, 215, 0, 0.02) 30px,
+      rgba(255, 215, 0, 0.02) 60px
+    );
+    animation: racing-move 30s linear infinite;
+    pointer-events: none;
+  }
+
+  .grid-pattern {
+    background-image:
+      linear-gradient(rgba(255, 215, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 215, 0, 0.03) 1px, transparent 1px);
+    background-size: 30px 30px;
+  }
+
+  .input-field {
+    @apply w-full bg-[#0A0A0A] border-2 border-[#FFD700]/30 focus:border-[#FFD700] rounded-lg p-3 text-white outline-none transition-all;
+  }
+
+  .label-field {
+    @apply block text-[#FFD700] font-bold mb-2 tracking-wider text-sm;
+  }
+
+  .btn-primary {
+    @apply bg-[#FFD700] hover:bg-[#FFA500] text-black font-bold py-3 px-8 rounded-lg transition-all duration-300;
+  }
+}
+
+@layer utilities {
+  .animate-pulse-slow {
+    animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
+@keyframes racing-move {
+  0% { transform: translateX(0) translateY(0); }
+  100% { transform: translateX(60px) translateY(60px); }
+}
+
+@keyframes racing-border-move {
+  0% { left: -100%; }
+  100% { left: 200%; }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
