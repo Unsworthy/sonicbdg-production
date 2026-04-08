@@ -1,6 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Trophy, Database, Clock, ChevronDown, ChevronLeft, ChevronRight, Zap } from 'lucide-react'
+import { Trophy, Database, Clock, ChevronLeft, ChevronRight, Zap, Radio, Play } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+
+// --- HELPER FUNCTIONS ---
+
+// Mengambil ID video dari berbagai format URL YouTube
+const getYouTubeId = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+};
+
+// Parsing tanggal dengan fallback WIB
+const parseMatchDate = (dateStr) => {
+  if (!dateStr) return null;
+  if (!dateStr.includes('Z') && !dateStr.match(/[+-]\d{2}:\d{2}$/)) {
+    return new Date(dateStr + '+07:00');
+  }
+  return new Date(dateStr);
+};
+
+// --- SUB-COMPONENTS ---
 
 const TeamLogo = ({ src, name, size = 'md' }) => {
   const sz = size === 'lg' ? 'w-12 h-12 md:w-16 md:h-16' : 'w-8 h-8 md:w-10 md:h-10'
@@ -13,6 +34,10 @@ const TeamLogo = ({ src, name, size = 'md' }) => {
     </div>
   )
 }
+
+const SkeletonCard = () => (
+  <div className="shrink-0 w-[280px] md:w-[320px] h-[300px] bg-neutral-900/20 skew-x-[-3deg] border border-white/5 animate-pulse" />
+)
 
 const MatchCard = ({ match }) => {
   const isFinished = match.finished
@@ -28,10 +53,9 @@ const MatchCard = ({ match }) => {
       }`} />
 
       <div className="relative p-5 z-10">
-        {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <div className="flex flex-col">
-            <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">Division // {match.division || 'PRO'}</span>
+            <span className="text-[9px] font-mono text-white/30 tracking-widest uppercase">{match.division || 'PRO'} // DIV</span>
             <span className="text-[9px] font-bold text-[#FFD700] italic uppercase">{match.tournament?.split(' ').slice(0,2).join(' ')}</span>
           </div>
           {isFinished ? (
@@ -52,13 +76,12 @@ const MatchCard = ({ match }) => {
           )}
         </div>
 
-        {/* Versus */}
         <div className="flex items-center justify-between gap-2 py-4 border-y border-white/5">
           <div className="flex flex-col items-center gap-2 flex-1">
             <TeamLogo src={match.logo1} name={match.team1} size="lg" />
             <span className="text-[10px] font-black italic text-white tracking-widest uppercase text-center">{match.team1}</span>
           </div>
-          <div className="flex flex-col items-center shrink-0">
+          <div className="flex flex-col items-center shrink-0 px-2">
             {isFinished ? (
               <div className="flex items-center gap-2 bg-black/60 px-3 py-1 border border-white/10 italic">
                 <span className={`text-2xl font-black ${match.score1 > match.score2 ? 'text-green-500' : 'text-white/40'}`}>{match.score1}</span>
@@ -75,7 +98,6 @@ const MatchCard = ({ match }) => {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="mt-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-white/40 font-mono text-[9px]">
             <Clock className="w-3 h-3 text-[#FFD700]" />
@@ -95,9 +117,77 @@ const MatchCard = ({ match }) => {
   )
 }
 
-const SkeletonCard = () => (
-  <div className="shrink-0 w-[280px] md:w-[320px] h-[250px] bg-neutral-900/20 skew-x-[-3deg] border border-white/5 animate-pulse" />
-)
+const OngoingCard = ({ match }) => {
+  const [playVideo, setPlayVideo] = useState(false);
+  const videoId = getYouTubeId(match.stream);
+
+  return (
+    <div className="relative shrink-0 w-[300px] md:w-[400px]">
+      <div className="absolute inset-0 bg-neutral-900/90 skew-x-[-2deg] border-l-4 border-red-600 shadow-[0_0_40px_rgba(220,38,38,0.2)]" />
+      
+      <div className="relative p-5 z-10">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2">
+            <Radio className="w-3 h-3 text-red-500 animate-pulse" />
+            <span className="text-[10px] font-mono text-red-500 uppercase tracking-tighter">Live Broadcast</span>
+          </div>
+          <div className="px-2 py-0.5 bg-red-600 text-white text-[9px] font-black italic skew-x-[-10deg]">
+            LIVE NOW
+          </div>
+        </div>
+
+        {/* Video Player Section */}
+        <div className="relative aspect-video mb-4 bg-black border border-white/5 overflow-hidden">
+          {playVideo && videoId ? (
+            <iframe
+              className="absolute inset-0 w-full h-full"
+              src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+              title="Match Stream"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <img 
+                src={videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '/api/placeholder/400/225'} 
+                className="absolute inset-0 w-full h-full object-cover opacity-40 blur-[1px]" 
+                alt="Stream Preview"
+              />
+              <button 
+                onClick={() => setPlayVideo(true)}
+                className="group relative z-10 flex flex-col items-center gap-2"
+              >
+                <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                  <Play className="w-6 h-6 text-white fill-current ml-1" />
+                </div>
+                <span className="text-[10px] font-black text-white italic tracking-[.2em]">WATCH STREAM</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Live Score Display */}
+        <div className="flex items-center justify-between gap-4 py-3 border-t border-white/10 bg-black/20 px-2">
+          <div className="flex flex-col items-center flex-1">
+            <span className="text-[10px] font-black text-white/60 mb-1 truncate w-full text-center uppercase">{match.team1}</span>
+            <span className="bebas text-5xl text-white leading-none">{match.score1 || 0}</span>
+          </div>
+          
+          <div className="flex flex-col items-center">
+            <div className="bebas text-xl text-red-600 italic">VS</div>
+          </div>
+
+          <div className="flex flex-col items-center flex-1">
+            <span className="text-[10px] font-black text-white/60 mb-1 truncate w-full text-center uppercase">{match.team2}</span>
+            <span className="bebas text-5xl text-white leading-none">{match.score2 || 0}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const HorizontalSlider = ({ items, renderItem }) => {
   const ref = useRef(null)
@@ -125,59 +215,79 @@ const HorizontalSlider = ({ items, renderItem }) => {
   }
 
   return (
-    <div className="relative">
-      {/* Prev */}
+    <div className="relative group">
       {canLeft && (
         <button onClick={() => scroll(-1)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 p-2 bg-[#FFD700] text-black hover:bg-white transition-all shadow-lg">
+          className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-20 p-2 bg-[#FFD700] text-black hover:bg-white transition-all shadow-lg opacity-0 group-hover:opacity-100">
           <ChevronLeft className="w-5 h-5" />
         </button>
       )}
 
-      {/* Slider */}
       <div ref={ref}
-        className="flex gap-6 overflow-x-auto pb-4 scroll-smooth"
+        className="flex gap-6 overflow-x-auto pb-4 scroll-smooth no-scrollbar"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        <style>{`.no-scrollbar::-webkit-scrollbar { display: none; }`}</style>
         {items.map((item, i) => (
           <div key={item.id || i}>{renderItem(item)}</div>
         ))}
       </div>
 
-      {/* Next */}
       {canRight && (
         <button onClick={() => scroll(1)}
-          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 p-2 bg-[#FFD700] text-black hover:bg-white transition-all shadow-lg">
+          className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-20 p-2 bg-[#FFD700] text-black hover:bg-white transition-all shadow-lg opacity-0 group-hover:opacity-100">
           <ChevronRight className="w-5 h-5" />
         </button>
       )}
-
-      {/* Fade edges */}
-      {canLeft && <div className="absolute left-0 top-0 bottom-4 w-12 bg-gradient-to-r from-[#050505] to-transparent pointer-events-none z-10" />}
-      {canRight && <div className="absolute right-0 top-0 bottom-4 w-12 bg-gradient-to-l from-[#050505] to-transparent pointer-events-none z-10" />}
     </div>
   )
 }
 
+// --- MAIN COMPONENT ---
+
 const MatchSchedule = () => {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('upcoming') // 'upcoming' | 'results'
+  const [activeTab, setActiveTab] = useState('upcoming')
+
+  const fetchMatches = async () => {
+    const { data, error } = await supabase
+      .from('matches')
+      .select('*')
+      .order('date_obj', { ascending: true })
+    if (!error) setMatches(data)
+    setLoading(false)
+  }
 
   useEffect(() => {
-    const fetchMatches = async () => {
-      const { data, error } = await supabase
-        .from('matches')
-        .select('*')
-        .order('date_obj', { ascending: true })
-      if (!error) setMatches(data)
-      setLoading(false)
-    }
     fetchMatches()
+
+    // AKTIFKAN REALTIME: Update otomatis saat skor di DB diubah
+    const channel = supabase
+      .channel('realtime_matches')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+        fetchMatches()
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
   }, [])
 
   const results = matches.filter(m => m.finished)
-  const upcoming = matches.filter(m => !m.finished)
+  const now = new Date()
+  const MATCH_DURATION_MS = 4 * 60 * 60 * 1000 
+
+  const ongoing = matches.filter(m => {
+    if (m.finished || !m.date_obj) return false
+    const matchTime = parseMatchDate(m.date_obj)
+    if (!matchTime) return false
+    return matchTime <= now && (now - matchTime) < MATCH_DURATION_MS
+  })
+
+  const upcoming = matches.filter(m => {
+    if (m.finished || !m.date_obj) return false
+    const matchTime = parseMatchDate(m.date_obj)
+    if (!matchTime) return false
+    return matchTime > now
+  })
 
   const activeMatches = activeTab === 'upcoming' ? upcoming : results
 
@@ -186,8 +296,7 @@ const MatchSchedule = () => {
       <div className="absolute top-0 right-0 w-1/2 h-full bg-[radial-gradient(#FFD700_1px,transparent_1px)] bg-[size:40px_40px] opacity-[0.03] pointer-events-none" />
 
       <div className="container mx-auto px-6 relative z-10">
-
-        {/* Header */}
+        {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -198,37 +307,47 @@ const MatchSchedule = () => {
               MATCH <span className="text-[#FFD700]">SCHEDULE</span>
             </h2>
           </div>
-          <div className="flex items-center gap-3 px-4 py-2 border border-white/10 bg-black/40 skew-x-[-10deg] self-start md:self-auto">
+          <div className="flex items-center gap-3 px-4 py-2 border border-white/10 bg-black/40 skew-x-[-10deg]">
             <Database className="w-3 h-3 text-[#FFD700] skew-x-[10deg]" />
-            <span className="text-[10px] font-black italic text-white skew-x-[10deg] tracking-widest">SUPABASE LIVE</span>
+            <span className="text-[10px] font-black italic text-white skew-x-[10deg] tracking-widest uppercase">COnn</span>
           </div>
         </div>
 
-        {/* Toggle Switch */}
+        {/* Tab Toggle */}
         <div className="flex mb-10">
           <div className="flex bg-white/5 border border-white/10 p-1 gap-1">
-            <button
-              onClick={() => setActiveTab('upcoming')}
-              className={`px-6 py-2 font-mono text-xs uppercase tracking-widest transition-all ${
-                activeTab === 'upcoming'
-                  ? 'bg-[#FFD700] text-black font-black'
-                  : 'text-white/40 hover:text-white'
-              }`}>
-              Upcoming {upcoming.length > 0 && `(${upcoming.length})`}
-            </button>
-            <button
-              onClick={() => setActiveTab('results')}
-              className={`px-6 py-2 font-mono text-xs uppercase tracking-widest transition-all ${
-                activeTab === 'results'
-                  ? 'bg-[#FFD700] text-black font-black'
-                  : 'text-white/40 hover:text-white'
-              }`}>
-              Results {results.length > 0 && `(${results.length})`}
-            </button>
+            {['upcoming', 'results'].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-6 py-2 font-mono text-xs uppercase tracking-widest transition-all ${
+                  activeTab === tab ? 'bg-[#FFD700] text-black font-black' : 'text-white/40 hover:text-white'
+                }`}
+              >
+                {tab} {tab === 'upcoming' ? (upcoming.length > 0 && `(${upcoming.length})`) : (results.length > 0 && `(${results.length})`)}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Content */}
+        {/* ONGOING SECTION */}
+        {!loading && ongoing.length > 0 && (
+          <div className="mb-16">
+            <div className="flex items-center gap-3 mb-6">
+              <Radio className="w-4 h-4 text-red-500 animate-pulse" />
+              <span className="bebas text-3xl md:text-4xl text-white italic">
+                ONGOING <span className="text-red-500">MATCHES</span>
+              </span>
+              <div className="flex-1 h-px bg-gradient-to-r from-red-500/30 to-transparent" />
+            </div>
+            <HorizontalSlider
+              items={ongoing}
+              renderItem={(match) => <OngoingCard match={match} />}
+            />
+          </div>
+        )}
+
+        {/* MAIN LIST SECTION */}
         {loading ? (
           <div className="flex gap-6 overflow-hidden">
             {[...Array(3)].map((_, i) => <SkeletonCard key={i} />)}
@@ -238,7 +357,7 @@ const MatchSchedule = () => {
             <div className="skew-x-[3deg]">
               <Trophy className="w-12 h-12 mx-auto mb-4 text-white/10" />
               <p className="bebas text-2xl text-white/20 italic tracking-widest">
-                {activeTab === 'upcoming' ? 'No upcoming sessions // Tambah via Admin Panel' : 'No results yet'}
+                {activeTab === 'upcoming' ? 'NO UPCOMING SESSIONS' : 'NO RESULTS FOUND'}
               </p>
             </div>
           </div>
@@ -248,22 +367,15 @@ const MatchSchedule = () => {
             renderItem={(match) => <MatchCard match={match} />}
           />
         )}
-
-        {/* Dot indicators */}
-        {!loading && activeMatches.length > 3 && (
-          <div className="flex justify-center gap-2 mt-6">
-            {activeMatches.map((_, i) => (
-              <div key={i} className="w-1 h-1 rounded-full bg-white/20" />
-            ))}
-          </div>
-        )}
       </div>
 
       <style>{`
         .bebas { font-family: 'Bebas Neue', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </section>
   )
 }
 
-export default MatchSchedule
+export default MatchSchedule;

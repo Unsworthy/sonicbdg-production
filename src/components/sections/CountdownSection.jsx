@@ -20,7 +20,13 @@ const CountdownBox = ({ label, value }) => (
 const CountdownSection = () => {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
-  const now = new Date()
+  const [now, setNow] = useState(new Date())
+
+  // Update 'now' setiap detik agar filter upcoming selalu akurat
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     const fetchMatches = async () => {
@@ -34,9 +40,23 @@ const CountdownSection = () => {
     fetchMatches()
   }, [])
 
-  const upcoming = matches.filter(m => !m.finished && m.date_obj && new Date(m.date_obj) > now)
+  // Helper: parse date_obj dengan benar
+  // Jika Supabase menyimpan string tanpa timezone (e.g. "2026-04-10T15:15:00+07:00"),
+  // new Date() akan parse dengan benar. Tapi kalau lama masih tanpa tz, fallback ke +07:00
+  const parseMatchDate = (dateStr) => {
+    if (!dateStr) return null
+    const d = new Date(dateStr)
+    // Cek apakah string mengandung timezone info
+    if (!dateStr.includes('Z') && !dateStr.match(/[+-]\d{2}:\d{2}$/)) {
+      // Tidak ada timezone → asumsikan WIB (UTC+7)
+      return new Date(dateStr + '+07:00')
+    }
+    return d
+  }
+
+  const upcoming = matches.filter(m => !m.finished && m.date_obj && parseMatchDate(m.date_obj) > now)
   const nextMatch = upcoming[0] ?? matches.filter(m => !m.finished)[0] ?? null
-  const countdown = useCountdown(nextMatch?.date_obj ? new Date(nextMatch.date_obj) : null)
+  const countdown = useCountdown(nextMatch?.date_obj ? parseMatchDate(nextMatch.date_obj) : null)
 
   const isRoyalDerby = nextMatch && (
     (nextMatch.team1?.toLowerCase().includes('onic') && nextMatch.team2?.toLowerCase().includes('rrq')) ||

@@ -77,8 +77,16 @@ const MatchForm = ({ showToast }) => {
     e.preventDefault()
     setLoading(true)
     try {
+      // Konversi datetime-local ke ISO string dengan timezone WIB (+07:00)
+      // Input datetime-local = "2026-04-10T15:15" (tanpa timezone)
+      // Kita asumsikan admin input dalam WIB, jadi tambah +07:00
+      let dateObjISO = form.date_obj
+      if (form.date_obj && !form.date_obj.includes('+') && !form.date_obj.endsWith('Z')) {
+        dateObjISO = form.date_obj + ':00+07:00'
+      }
       const payload = {
         ...form,
+        date_obj: dateObjISO,
         score1: parseInt(form.score1),
         score2: parseInt(form.score2),
       }
@@ -106,7 +114,7 @@ const MatchForm = ({ showToast }) => {
     setForm({
       team1: match.team1, team2: match.team2,
       tournament: match.tournament, division: match.division || 'PRO',
-      time: match.time, date_obj: match.date_obj?.slice(0, 16) || '',
+      time: match.time, date_obj: match.date_obj ? match.date_obj.slice(0, 16) : '',
       stream: match.stream || '', logo1: match.logo1 || '', logo2: match.logo2 || '',
       finished: match.finished, score1: match.score1, score2: match.score2,
       onic_won: match.onic_won || false,
@@ -217,7 +225,7 @@ const MatchForm = ({ showToast }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Tanggal & Jam_</label>
+            <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Tanggal & Jam_ <span className="text-white/30">(WIB / GMT+7)</span></label>
             <input type="datetime-local" value={form.date_obj} onChange={e => setForm(p => ({...p, date_obj: e.target.value}))}
               className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold appearance-none" required />
           </div>
