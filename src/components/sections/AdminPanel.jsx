@@ -56,12 +56,7 @@ const MatchForm = ({ showToast }) => {
       limit: 100,
       sortBy: { column: 'name', order: 'asc' }
     })
-
-    if (error) {
-      console.error('Error fetching logos:', error)
-      return
-    }
-
+    if (error) { console.error('Error fetching logos:', error); return }
     if (data) {
       const logos = data
         .filter(file => file.name !== '.emptyFolderPlaceholder' && file.name !== '.keep')
@@ -77,9 +72,6 @@ const MatchForm = ({ showToast }) => {
     e.preventDefault()
     setLoading(true)
     try {
-      // Konversi datetime-local ke ISO string dengan timezone WIB (+07:00)
-      // Input datetime-local = "2026-04-10T15:15" (tanpa timezone)
-      // Kita asumsikan admin input dalam WIB, jadi tambah +07:00
       let dateObjISO = form.date_obj
       if (form.date_obj && !form.date_obj.includes('+') && !form.date_obj.endsWith('Z')) {
         dateObjISO = form.date_obj + ':00+07:00'
@@ -141,7 +133,6 @@ const MatchForm = ({ showToast }) => {
   const LogoSelector = ({ value, onChange, label }) => (
     <div className="space-y-2">
       <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">{label}</label>
-
       {availableLogos.length === 0 ? (
         <p className="font-mono text-[10px] text-white/20 uppercase tracking-widest py-3">
           ⚠ Belum ada logo di folder logos/
@@ -158,25 +149,17 @@ const MatchForm = ({ showToast }) => {
                   ${value === logo.url ? 'border-[#FFD700] bg-[#FFD700]/10' : 'border-white/10'}`}
                 title={logo.name}
               >
-                <img
-                  src={logo.url}
-                  alt={logo.name}
-                  className="w-full h-10 object-contain"
-                  onError={e => { e.target.style.opacity = '0.2' }}
-                />
+                <img src={logo.url} alt={logo.name} className="w-full h-10 object-contain"
+                  onError={e => { e.target.style.opacity = '0.2' }} />
               </button>
             ))}
           </div>
-
           {value && (
             <div className="flex items-center gap-3 mt-1 p-2 border border-[#FFD700]/20 bg-[#FFD700]/5">
               <img src={value} alt="selected" className="w-8 h-8 object-contain" />
               <p className="font-mono text-[9px] text-[#FFD700] uppercase tracking-widest">Logo dipilih ✓</p>
-              <button
-                type="button"
-                onClick={() => onChange('')}
-                className="ml-auto font-mono text-[9px] text-white/30 hover:text-red-400 uppercase"
-              >
+              <button type="button" onClick={() => onChange('')}
+                className="ml-auto font-mono text-[9px] text-white/30 hover:text-red-400 uppercase">
                 ✕ clear
               </button>
             </div>
@@ -189,7 +172,6 @@ const MatchForm = ({ showToast }) => {
   return (
     <div className="space-y-10">
       <form onSubmit={handleSubmit} className="space-y-6">
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Team 1 (ONIC)_</label>
@@ -225,7 +207,9 @@ const MatchForm = ({ showToast }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
-            <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Tanggal & Jam_ <span className="text-white/30">(WIB / GMT+7)</span></label>
+            <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">
+              Tanggal & Jam_ <span className="text-white/30">(WIB / GMT+7)</span>
+            </label>
             <input type="datetime-local" value={form.date_obj} onChange={e => setForm(p => ({...p, date_obj: e.target.value}))}
               className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold appearance-none" required />
           </div>
@@ -328,26 +312,305 @@ const MatchForm = ({ showToast }) => {
 }
 
 // ─────────────────────────────────────────
-// Gallery Manager (NEW)
+// Watch Party Manager
+// ─────────────────────────────────────────
+const WatchPartyManager = ({ showToast }) => {
+  const [parties, setParties] = useState([])
+  const [editId, setEditId] = useState(null)
+  const [form, setForm] = useState({ title: '', location: '', date: '', time: '', image_url: '' })
+  const [wpFile, setWpFile] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => { fetchParties() }, [])
+
+  const fetchParties = async () => {
+    const { data } = await supabase.from('watch_parties').select('*').order('date', { ascending: true })
+    if (data) setParties(data)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      let image_url = form.image_url || ''
+      if (wpFile) {
+        const fileExt = wpFile.name.split('.').pop()
+        const fileName = `wp-${Date.now()}.${fileExt}`
+        const filePath = `watch-parties/${fileName}`
+        const { error: uploadError } = await supabase.storage.from('gallery').upload(filePath, wpFile)
+        if (uploadError) throw uploadError
+        const { data } = supabase.storage.from('gallery').getPublicUrl(filePath)
+        image_url = data.publicUrl
+      }
+      const payload = { title: form.title, location: form.location, date: form.date, time: form.time, image_url }
+      if (editId) {
+        const { error } = await supabase.from('watch_parties').update(payload).eq('id', editId)
+        if (error) throw error
+        showToast('Watch Party berhasil diupdate!')
+        setEditId(null)
+      } else {
+        const { error } = await supabase.from('watch_parties').insert([payload])
+        if (error) throw error
+        showToast('Watch Party berhasil ditambahkan!')
+      }
+      resetForm()
+      fetchParties()
+    } catch (err) {
+      showToast('Gagal: ' + err.message, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEdit = (wp) => {
+    setEditId(wp.id)
+    setForm({ title: wp.title, location: wp.location, date: wp.date, time: wp.time, image_url: wp.image_url || '' })
+    window.scrollTo({ top: document.getElementById('admin').offsetTop, behavior: 'smooth' })
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Hapus watch party ini?')) return
+    await supabase.from('watch_parties').delete().eq('id', id)
+    showToast('Watch Party dihapus!')
+    fetchParties()
+  }
+
+  const resetForm = () => {
+    setEditId(null)
+    setWpFile(null)
+    setForm({ title: '', location: '', date: '', time: '', image_url: '' })
+  }
+
+  return (
+    <div className="space-y-10">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="md:col-span-2 space-y-2">
+          <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Match_Name_</label>
+          <input type="text" value={form.title} onChange={e => setForm(p => ({...p, title: e.target.value}))}
+            placeholder="ONIC VS RRQ - GRAND FINAL"
+            className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold" required />
+        </div>
+        <div className="space-y-2">
+          <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Location_</label>
+          <div className="relative">
+            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+            <input type="text" value={form.location} onChange={e => setForm(p => ({...p, location: e.target.value}))}
+              className="w-full bg-white/5 border border-white/10 pl-12 pr-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold" required />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Date_</label>
+            <input type="date" value={form.date} onChange={e => setForm(p => ({...p, date: e.target.value}))}
+              className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold appearance-none" required />
+          </div>
+          <div className="space-y-2">
+            <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Time_</label>
+            <div className="relative">
+              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+              <input type="time" value={form.time} onChange={e => setForm(p => ({...p, time: e.target.value}))}
+                className="w-full bg-white/5 border border-white/10 pl-10 pr-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold appearance-none" required />
+            </div>
+          </div>
+        </div>
+        <div className="md:col-span-2 space-y-2">
+          <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Event_Poster_</label>
+          <div className="relative border border-dashed border-white/20 p-4 bg-white/5 hover:border-[#FFD700]/50 transition-all">
+            <input type="file" accept="image/*" onChange={e => setWpFile(e.target.files[0])}
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+            <p className="font-mono text-[10px] text-white/40 text-center uppercase">
+              {wpFile ? `✓ ${wpFile.name}` : editId ? '← Kosongkan jika tidak ingin ganti poster' : 'Click to upload poster'}
+            </p>
+          </div>
+        </div>
+        <button type="submit" disabled={loading}
+          className="md:col-span-2 flex items-center justify-center gap-3 bg-[#FFD700] text-black py-4 font-black uppercase hover:bg-white transition-all disabled:opacity-50">
+          <PlusCircle className="w-5 h-5" />
+          <span className="bebas text-2xl italic tracking-widest">
+            {loading ? 'MENYIMPAN...' : editId ? 'UPDATE WATCH PARTY' : 'DEPLOY WATCH PARTY'}
+          </span>
+        </button>
+        {editId && (
+          <button type="button" onClick={resetForm}
+            className="md:col-span-2 py-3 border border-white/10 text-white/30 font-mono text-xs uppercase tracking-widest hover:text-white transition-all">
+            Cancel Edit
+          </button>
+        )}
+      </form>
+
+      {parties.length > 0 && (
+        <div>
+          <p className="font-mono text-[10px] text-white/30 uppercase tracking-widest mb-4">Existing Watch Parties ({parties.length})</p>
+          <div className="space-y-2">
+            {parties.map(wp => (
+              <div key={wp.id} className="flex items-center justify-between bg-white/5 border border-white/5 px-4 py-3">
+                <div>
+                  <p className="font-bold text-white text-sm">{wp.title}</p>
+                  <p className="font-mono text-[9px] text-white/30 uppercase">{wp.location} — {wp.date} {wp.time}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => handleEdit(wp)}
+                    className="px-3 py-1 border border-[#FFD700]/30 text-[#FFD700] font-mono text-[10px] hover:bg-[#FFD700]/10 transition-all">
+                    Edit
+                  </button>
+                  <button onClick={() => handleDelete(wp.id)}
+                    className="px-3 py-1 border border-red-600/30 text-red-500 font-mono text-[10px] hover:bg-red-600/10 transition-all">
+                    Hapus
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────
+// Event Manager
+// ─────────────────────────────────────────
+const EventManager = ({ showToast }) => {
+  const [events, setEvents] = useState([])
+  const [editId, setEditId] = useState(null)
+  const [form, setForm] = useState({ title: '', desc: '', date: '' })
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => { fetchEvents() }, [])
+
+  const fetchEvents = async () => {
+    const { data } = await supabase.from('events').select('*').order('date', { ascending: true })
+    if (data) setEvents(data)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const dateObj = new Date(form.date)
+      const payload = {
+        title: form.title,
+        description: form.desc,
+        date: form.date,
+        day: dateObj.getDate(),
+        month: dateObj.toLocaleString('id-ID', { month: 'short' }),
+      }
+      if (editId) {
+        const { error } = await supabase.from('events').update(payload).eq('id', editId)
+        if (error) throw error
+        showToast('Kegiatan berhasil diupdate!')
+        setEditId(null)
+      } else {
+        const { error } = await supabase.from('events').insert([payload])
+        if (error) throw error
+        showToast('Kegiatan berhasil ditambahkan!')
+      }
+      resetForm()
+      fetchEvents()
+    } catch (err) {
+      showToast('Gagal: ' + err.message, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEdit = (event) => {
+    setEditId(event.id)
+    setForm({ title: event.title, desc: event.description, date: event.date })
+    window.scrollTo({ top: document.getElementById('admin').offsetTop, behavior: 'smooth' })
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Hapus kegiatan ini?')) return
+    await supabase.from('events').delete().eq('id', id)
+    showToast('Kegiatan dihapus!')
+    fetchEvents()
+  }
+
+  const resetForm = () => {
+    setEditId(null)
+    setForm({ title: '', desc: '', date: '' })
+  }
+
+  return (
+    <div className="space-y-10">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Event_Heading_</label>
+          <input type="text" value={form.title} onChange={e => setForm(p => ({...p, title: e.target.value}))}
+            className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold" required />
+        </div>
+        <div className="space-y-2">
+          <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Brief_Description_</label>
+          <textarea rows="3" value={form.desc} onChange={e => setForm(p => ({...p, desc: e.target.value}))}
+            className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold resize-none" required />
+        </div>
+        <div className="max-w-xs space-y-2">
+          <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Event_Date_</label>
+          <input type="date" value={form.date} onChange={e => setForm(p => ({...p, date: e.target.value}))}
+            className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none font-bold" required />
+        </div>
+        <button type="submit" disabled={loading}
+          className="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/20 text-white py-4 font-black uppercase tracking-widest transition-all disabled:opacity-50">
+          <Calendar className="w-5 h-5 text-[#FFD700]" />
+          <span className="bebas text-2xl italic">
+            {loading ? 'MENYIMPAN...' : editId ? 'UPDATE KEGIATAN' : 'UPDATE CALENDAR'}
+          </span>
+        </button>
+        {editId && (
+          <button type="button" onClick={resetForm}
+            className="w-full py-3 border border-white/10 text-white/30 font-mono text-xs uppercase tracking-widest hover:text-white transition-all">
+            Cancel Edit
+          </button>
+        )}
+      </form>
+
+      {events.length > 0 && (
+        <div>
+          <p className="font-mono text-[10px] text-white/30 uppercase tracking-widest mb-4">Existing Events ({events.length})</p>
+          <div className="space-y-2">
+            {events.map(ev => (
+              <div key={ev.id} className="flex items-center justify-between bg-white/5 border border-white/5 px-4 py-3">
+                <div>
+                  <p className="font-bold text-white text-sm">{ev.title}</p>
+                  <p className="font-mono text-[9px] text-white/30 uppercase">{ev.day} {ev.month} — {ev.description?.slice(0, 40)}...</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => handleEdit(ev)}
+                    className="px-3 py-1 border border-[#FFD700]/30 text-[#FFD700] font-mono text-[10px] hover:bg-[#FFD700]/10 transition-all">
+                    Edit
+                  </button>
+                  <button onClick={() => handleDelete(ev.id)}
+                    className="px-3 py-1 border border-red-600/30 text-red-500 font-mono text-[10px] hover:bg-red-600/10 transition-all">
+                    Hapus
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────
+// Gallery Manager
 // ─────────────────────────────────────────
 const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
   const [activeAlbum, setActiveAlbum] = useState('all')
   const [photos, setPhotos] = useState([])
   const [loadingPhotos, setLoadingPhotos] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
-  // Upload state
   const [photoFile, setPhotoFile] = useState(null)
   const [photoCaption, setPhotoCaption] = useState('')
   const [selectedAlbumId, setSelectedAlbumId] = useState('')
   const [photoFolder, setPhotoFolder] = useState('gallery')
   const [uploading, setUploading] = useState(false)
-  // Album create state
   const [newAlbumName, setNewAlbumName] = useState('')
   const [isCreatingAlbum, setIsCreatingAlbum] = useState(false)
 
-  useEffect(() => {
-    fetchPhotos()
-  }, [activeAlbum])
+  useEffect(() => { fetchPhotos() }, [activeAlbum])
 
   const fetchPhotos = async () => {
     setLoadingPhotos(true)
@@ -362,11 +625,9 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
     if (!confirm(`Hapus foto "${photo.caption || photo.id}"?`)) return
     setDeletingId(photo.id)
     try {
-      // Delete from storage jika ada file_path
       if (photo.file_path) {
         await supabase.storage.from('gallery').remove([photo.file_path])
       }
-      // Delete from DB
       const { error } = await supabase.from('gallery').delete().eq('id', photo.id)
       if (error) throw error
       showToast('Foto berhasil dihapus!')
@@ -383,7 +644,7 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
     const { error } = await supabase.from('albums').delete().eq('id', album.id)
     if (error) { showToast('Gagal hapus album: ' + error.message, 'error'); return }
     showToast(`Album "${album.name}" dihapus!`)
-    onAlbumCreated() // trigger refresh albums di parent
+    onAlbumCreated()
     if (activeAlbum === album.id) setActiveAlbum('all')
   }
 
@@ -410,25 +671,18 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
       const fileExt = photoFile.name.split('.').pop()
       const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`
       const filePath = `${photoFolder}/${fileName}`
-
-      const { error: uploadError } = await supabase.storage
-        .from('gallery')
-        .upload(filePath, photoFile, { upsert: false })
+      const { error: uploadError } = await supabase.storage.from('gallery').upload(filePath, photoFile, { upsert: false })
       if (uploadError) throw uploadError
-
       const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(filePath)
-
       if (photoFolder === 'gallery') {
         const { error: dbError } = await supabase.from('gallery').insert([{
           url: publicUrl,
           caption: photoCaption || photoFile.name,
           file_path: filePath,
-          // ✅ FIX: simpan album_id jika dipilih
           album_id: selectedAlbumId || null,
         }])
         if (dbError) throw dbError
       }
-
       showToast(`File berhasil diupload${selectedAlbumId ? ' ke album!' : '!'}`)
       setPhotoFile(null)
       setPhotoCaption('')
@@ -447,50 +701,36 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-      {/* ── Kolom Kiri: Album Management ── */}
       <div className="lg:col-span-1 space-y-6">
-
-        {/* Create Album */}
         <div className="bg-white/[0.02] p-6 border border-white/5">
           <SectionTitle icon={PlusCircle}>MANAGE_FOLDERS</SectionTitle>
           <form onSubmit={handleCreateAlbum} className="space-y-4">
             <div className="space-y-2">
               <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">New_Album_Name</label>
-              <input
-                type="text"
-                value={newAlbumName}
-                onChange={(e) => setNewAlbumName(e.target.value)}
+              <input type="text" value={newAlbumName} onChange={(e) => setNewAlbumName(e.target.value)}
                 placeholder="CONTOH: NOBAR MPL S13"
-                className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none transition-all text-sm font-bold"
-              />
+                className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none transition-all text-sm font-bold" />
             </div>
-            <button
-              type="submit"
-              disabled={isCreatingAlbum || !newAlbumName}
-              className="w-full py-3 bg-white/10 text-white font-mono text-[10px] uppercase tracking-widest hover:bg-[#FFD700] hover:text-black transition-all disabled:opacity-50"
-            >
+            <button type="submit" disabled={isCreatingAlbum || !newAlbumName}
+              className="w-full py-3 bg-white/10 text-white font-mono text-[10px] uppercase tracking-widest hover:bg-[#FFD700] hover:text-black transition-all disabled:opacity-50">
               {isCreatingAlbum ? 'CREATING...' : 'CREATE_NEW_FOLDER'}
             </button>
           </form>
 
-          {/* Album List */}
           <div className="pt-6 border-t border-white/5 mt-6">
             <p className="font-mono text-[9px] text-white/20 uppercase mb-3 text-center tracking-widest">
               Active_Folders ({albums.length})
             </p>
-            <div className="max-h-[240px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+            <div className="max-h-[240px] overflow-y-auto space-y-2 pr-1">
               {albums.map(a => (
                 <div key={a.id} className="flex items-center justify-between p-3 bg-black/40 border border-white/5 group">
                   <div>
                     <p className="font-mono text-[10px] text-white/60 uppercase">{a.name}</p>
                     <p className="font-mono text-[9px] text-white/20">ID: {a.id.slice(0, 8)}</p>
                   </div>
-                  <button
-                    onClick={() => handleDeleteAlbum(a)}
+                  <button onClick={() => handleDeleteAlbum(a)}
                     className="opacity-0 group-hover:opacity-100 p-1.5 text-red-500/50 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all"
-                    title="Hapus Album"
-                  >
+                    title="Hapus Album">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -502,12 +742,9 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
           </div>
         </div>
 
-        {/* Upload Form */}
         <div className="bg-white/[0.02] p-6 border border-white/5">
           <SectionTitle icon={ImageIcon}>ASSET_UPLOAD</SectionTitle>
           <form onSubmit={handlePhotoUpload} className="space-y-5">
-
-            {/* Destination Bucket */}
             <div className="space-y-2">
               <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Destination_Bucket</label>
               <div className="flex gap-2">
@@ -524,15 +761,11 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
               </div>
             </div>
 
-            {/* Album Selector — hanya untuk gallery */}
             {photoFolder === 'gallery' && (
               <div className="space-y-2">
                 <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Assign_To_Album</label>
-                <select
-                  value={selectedAlbumId}
-                  onChange={(e) => setSelectedAlbumId(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none transition-all text-sm font-bold appearance-none cursor-pointer"
-                >
+                <select value={selectedAlbumId} onChange={(e) => setSelectedAlbumId(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none transition-all text-sm font-bold appearance-none cursor-pointer">
                   <option value="" className="bg-[#0D0D0D]">-- NO ALBUM (GENERAL) --</option>
                   {albums.map(a => (
                     <option key={a.id} value={a.id} className="bg-[#0D0D0D] text-white">📂 {a.name.toUpperCase()}</option>
@@ -541,21 +774,17 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
               </div>
             )}
 
-            {/* Caption */}
             {photoFolder === 'gallery' && (
               <div className="space-y-2">
                 <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Caption_</label>
-                <input type="text" value={photoCaption}
-                  onChange={(e) => setPhotoCaption(e.target.value)}
+                <input type="text" value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)}
                   placeholder="Contoh: Atmosfer Nobar di Warunk Upnormal"
                   className="w-full bg-white/5 border border-white/10 px-4 py-3 text-white focus:border-[#FFD700] focus:outline-none transition-all text-sm font-bold" />
               </div>
             )}
 
-            {/* Drop Zone */}
             <div className="group relative border-2 border-dashed border-white/10 hover:border-[#FFD700]/50 transition-all p-8 text-center cursor-pointer bg-white/[0.02]">
-              <input type="file" accept="image/*"
-                onChange={(e) => setPhotoFile(e.target.files[0])}
+              <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files[0])}
                 className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
               <Upload className="w-8 h-8 text-white/10 group-hover:text-[#FFD700] transition-colors mx-auto mb-3" />
               <p className="font-mono text-[10px] text-white/40 uppercase tracking-[0.3em] group-hover:text-white transition-colors">
@@ -581,48 +810,37 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
         </div>
       </div>
 
-      {/* ── Kolom Kanan: Gallery Viewer/Manager ── */}
       <div className="lg:col-span-2">
         <div className="flex items-center justify-between mb-6">
           <SectionTitle icon={Eye}>GALLERY_MANAGER</SectionTitle>
-          <button
-            onClick={fetchPhotos}
-            className="flex items-center gap-2 px-3 py-2 border border-white/10 text-white/30 hover:text-white hover:border-white/30 transition-all font-mono text-[10px] uppercase"
-          >
+          <button onClick={fetchPhotos}
+            className="flex items-center gap-2 px-3 py-2 border border-white/10 text-white/30 hover:text-white hover:border-white/30 transition-all font-mono text-[10px] uppercase">
             <RefreshCw className="w-3 h-3" />
             Refresh
           </button>
         </div>
 
-        {/* Filter by Album */}
         <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-          <button
-            onClick={() => setActiveAlbum('all')}
+          <button onClick={() => setActiveAlbum('all')}
             className={`px-4 py-1.5 font-mono text-[10px] uppercase tracking-widest border transition-all shrink-0
-              ${activeAlbum === 'all' ? 'bg-[#FFD700] text-black border-[#FFD700]' : 'border-white/10 text-white/40 hover:border-white/30'}`}
-          >
+              ${activeAlbum === 'all' ? 'bg-[#FFD700] text-black border-[#FFD700]' : 'border-white/10 text-white/40 hover:border-white/30'}`}>
             ALL ({photos.length})
           </button>
           {albums.map(album => (
-            <button
-              key={album.id}
-              onClick={() => setActiveAlbum(album.id)}
+            <button key={album.id} onClick={() => setActiveAlbum(album.id)}
               className={`px-4 py-1.5 font-mono text-[10px] uppercase tracking-widest border transition-all shrink-0 whitespace-nowrap
-                ${activeAlbum === album.id ? 'bg-[#FFD700] text-black border-[#FFD700]' : 'border-white/10 text-white/40 hover:border-white/30'}`}
-            >
+                ${activeAlbum === album.id ? 'bg-[#FFD700] text-black border-[#FFD700]' : 'border-white/10 text-white/40 hover:border-white/30'}`}>
               {album.name}
             </button>
           ))}
         </div>
 
-        {/* Folder Label */}
         <div className="flex items-center gap-2 mb-4 font-mono text-[10px] text-white/20 uppercase tracking-widest">
           <Folder className="w-3 h-3 text-[#FFD700]" />
           <span>Viewing: {albumName(activeAlbum)}</span>
           <span className="ml-auto">{photos.length} assets</span>
         </div>
 
-        {/* Loading Skeleton */}
         {loadingPhotos && (
           <div className="grid grid-cols-3 gap-3">
             {[...Array(6)].map((_, i) => (
@@ -631,46 +849,30 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
           </div>
         )}
 
-        {/* Empty State */}
         {!loadingPhotos && photos.length === 0 && (
           <div className="text-center py-16 font-mono text-white/20 uppercase tracking-widest text-xs border border-dashed border-white/5 bg-white/[0.01]">
             No_Assets_In_This_Folder
           </div>
         )}
 
-        {/* Photo Grid */}
         {!loadingPhotos && photos.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {photos.map(photo => (
               <div key={photo.id} className="group relative aspect-square border border-white/5 overflow-hidden bg-black/40">
-                <img
-                  src={photo.url}
-                  alt={photo.caption}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                />
-
-                {/* Hover Overlay */}
+                <img src={photo.url} alt={photo.caption}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                 <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-3">
                   <div>
                     {photo.caption && (
-                      <p className="font-mono text-[9px] text-white/80 uppercase leading-relaxed line-clamp-2">
-                        {photo.caption}
-                      </p>
+                      <p className="font-mono text-[9px] text-white/80 uppercase leading-relaxed line-clamp-2">{photo.caption}</p>
                     )}
-                    {photo.album_id && (
-                      <p className="font-mono text-[9px] text-[#FFD700]/70 mt-1">
-                        📂 {albums.find(a => a.id === photo.album_id)?.name || 'Album'}
-                      </p>
-                    )}
-                    {!photo.album_id && (
-                      <p className="font-mono text-[9px] text-white/30 mt-1">📂 General</p>
-                    )}
+                    {photo.album_id
+                      ? <p className="font-mono text-[9px] text-[#FFD700]/70 mt-1">📂 {albums.find(a => a.id === photo.album_id)?.name || 'Album'}</p>
+                      : <p className="font-mono text-[9px] text-white/30 mt-1">📂 General</p>
+                    }
                   </div>
-                  <button
-                    onClick={() => handleDeletePhoto(photo)}
-                    disabled={deletingId === photo.id}
-                    className="flex items-center justify-center gap-1.5 w-full py-2 bg-red-600/20 border border-red-500/40 text-red-400 font-mono text-[9px] uppercase tracking-widest hover:bg-red-600/40 transition-all disabled:opacity-50"
-                  >
+                  <button onClick={() => handleDeletePhoto(photo)} disabled={deletingId === photo.id}
+                    className="flex items-center justify-center gap-1.5 w-full py-2 bg-red-600/20 border border-red-500/40 text-red-400 font-mono text-[9px] uppercase tracking-widest hover:bg-red-600/40 transition-all disabled:opacity-50">
                     <Trash2 className="w-3 h-3" />
                     {deletingId === photo.id ? 'DELETING...' : 'DELETE_ASSET'}
                   </button>
@@ -689,16 +891,10 @@ const GalleryManager = ({ albums, showToast, onAlbumCreated }) => {
 // ─────────────────────────────────────────
 const AdminPanel = () => {
   const { user, logout } = useAuth()
-  const [watchPartyForm, setWatchPartyForm] = useState({ title: '', location: '', date: '', time: '' })
-  const [eventForm, setEventForm] = useState({ title: '', desc: '', date: '' })
   const [toast, setToast] = useState({ message: '', type: 'success' })
-  const [loading, setLoading] = useState({ wp: false, event: false })
-  const [wpFile, setWpFile] = useState(null)
   const [albums, setAlbums] = useState([])
 
-  useEffect(() => {
-    fetchAlbums()
-  }, [])
+  useEffect(() => { fetchAlbums() }, [])
 
   const fetchAlbums = async () => {
     const { data } = await supabase.from('albums').select('*').order('created_at', { ascending: false })
@@ -708,60 +904,6 @@ const AdminPanel = () => {
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast({ message: '', type: 'success' }), 4000)
-  }
-
-  const handleWPSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(p => ({ ...p, wp: true }))
-    try {
-      let publicUrl = ''
-      if (wpFile) {
-        const fileExt = wpFile.name.split('.').pop()
-        const fileName = `wp-${Date.now()}.${fileExt}`
-        const filePath = `watch-parties/${fileName}`
-        const { error: uploadError } = await supabase.storage.from('gallery').upload(filePath, wpFile)
-        if (uploadError) throw uploadError
-        const { data } = supabase.storage.from('gallery').getPublicUrl(filePath)
-        publicUrl = data.publicUrl
-      }
-      const { error } = await supabase.from('watch_parties').insert([{
-        title: watchPartyForm.title,
-        location: watchPartyForm.location,
-        date: watchPartyForm.date,
-        time: watchPartyForm.time,
-        image_url: publicUrl
-      }])
-      if (error) throw error
-      showToast('Watch Party Berhasil Di-deploy!')
-      setWatchPartyForm({ title: '', location: '', date: '', time: '' })
-      setWpFile(null)
-    } catch (err) {
-      showToast('Gagal: ' + err.message, 'error')
-    } finally {
-      setLoading(p => ({ ...p, wp: false }))
-    }
-  }
-
-  const handleEventSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(p => ({ ...p, event: true }))
-    try {
-      const dateObj = new Date(eventForm.date)
-      const { error } = await supabase.from('events').insert([{
-        title: eventForm.title,
-        description: eventForm.desc,
-        date: eventForm.date,
-        day: dateObj.getDate(),
-        month: dateObj.toLocaleString('id-ID', { month: 'short' }),
-      }])
-      if (error) throw error
-      showToast('Kegiatan berhasil ditambahkan!')
-      setEventForm({ title: '', desc: '', date: '' })
-    } catch (err) {
-      showToast('Gagal menyimpan: ' + err.message, 'error')
-    } finally {
-      setLoading(p => ({ ...p, event: false }))
-    }
   }
 
   if (!user) return <AdminLogin />
@@ -804,7 +946,7 @@ const AdminPanel = () => {
             <Activity className="w-48 h-48 text-white" />
           </div>
 
-          {/* FORM 1: Match Schedule */}
+          {/* SECTION 1: Match Schedule */}
           <div className="mb-20">
             <SectionTitle icon={Trophy}>TAMBAH / UPDATE JADWAL MATCH</SectionTitle>
             <MatchForm showToast={showToast} />
@@ -812,101 +954,23 @@ const AdminPanel = () => {
 
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-20" />
 
-          {/* FORM 2: Watch Party */}
+          {/* SECTION 2: Watch Party */}
           <div className="mb-20">
-            <SectionTitle icon={Tv}>TAMBAH WATCH PARTY</SectionTitle>
-            <form onSubmit={handleWPSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="md:col-span-2 space-y-2">
-                <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Match_Name_</label>
-                <input type="text" value={watchPartyForm.title}
-                  onChange={(e) => setWatchPartyForm(p => ({ ...p, title: e.target.value }))}
-                  placeholder="CONTOH: ONIC VS RRQ - GRAND FINAL"
-                  className="w-full bg-white/5 border border-white/10 px-5 py-4 text-white focus:border-[#FFD700] focus:outline-none transition-all font-bold tracking-wide" required />
-              </div>
-              <div className="space-y-2">
-                <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Location_Venue_</label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                  <input type="text" value={watchPartyForm.location}
-                    onChange={(e) => setWatchPartyForm(p => ({ ...p, location: e.target.value }))}
-                    className="w-full bg-white/5 border border-white/10 pl-12 pr-5 py-4 text-white focus:border-[#FFD700] focus:outline-none transition-all font-bold" required />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Date_</label>
-                  <input type="date" value={watchPartyForm.date}
-                    onChange={(e) => setWatchPartyForm(p => ({ ...p, date: e.target.value }))}
-                    className="w-full bg-white/5 border border-white/10 px-4 py-4 text-white focus:border-[#FFD700] focus:outline-none transition-all font-bold appearance-none" required />
-                </div>
-                <div className="space-y-2">
-                  <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Time_</label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                    <input type="time" value={watchPartyForm.time}
-                      onChange={(e) => setWatchPartyForm(p => ({ ...p, time: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/10 pl-10 pr-4 py-4 text-white focus:border-[#FFD700] focus:outline-none transition-all font-bold appearance-none" required />
-                  </div>
-                </div>
-              </div>
-              <div className="md:col-span-2 space-y-2">
-                <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Event_Poster_ (16:9 Recommended)</label>
-                <div className="relative border border-dashed border-white/20 p-4 bg-white/5 hover:border-[#FFD700]/50 transition-all">
-                  <input type="file" accept="image/*"
-                    onChange={(e) => setWpFile(e.target.files[0])}
-                    className="absolute inset-0 opacity-0 cursor-pointer" />
-                  <p className="font-mono text-[10px] text-white/40 text-center uppercase">
-                    {wpFile ? `✓ Selected: ${wpFile.name}` : 'Click to upload poster'}
-                  </p>
-                </div>
-              </div>
-              <button type="submit" disabled={loading.wp}
-                className="md:col-span-2 flex items-center justify-center gap-3 bg-[#FFD700] text-black py-5 font-black uppercase hover:bg-white transition-all active:scale-95 disabled:opacity-50">
-                <PlusCircle className="w-5 h-5" />
-                <span className="bebas text-2xl italic tracking-widest">
-                  {loading.wp ? 'MENYIMPAN...' : 'DEPLOY EVENT TO SYSTEM'}
-                </span>
-              </button>
-            </form>
+            <SectionTitle icon={Tv}>TAMBAH / UPDATE WATCH PARTY</SectionTitle>
+            <WatchPartyManager showToast={showToast} />
           </div>
 
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-20" />
 
-          {/* FORM 3: Kegiatan */}
+          {/* SECTION 3: Kegiatan */}
           <div className="mb-20">
-            <SectionTitle icon={Calendar}>TAMBAH KEGIATAN</SectionTitle>
-            <form onSubmit={handleEventSubmit} className="space-y-8">
-              <div className="space-y-2">
-                <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Event_Heading_</label>
-                <input type="text" value={eventForm.title}
-                  onChange={(e) => setEventForm(p => ({ ...p, title: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 px-5 py-4 text-white focus:border-[#FFD700] focus:outline-none transition-all font-bold" required />
-              </div>
-              <div className="space-y-2">
-                <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Brief_Description_</label>
-                <textarea rows="3" value={eventForm.desc}
-                  onChange={(e) => setEventForm(p => ({ ...p, desc: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 px-5 py-4 text-white focus:border-[#FFD700] focus:outline-none transition-all font-bold resize-none" required />
-              </div>
-              <div className="max-w-xs space-y-2">
-                <label className="block font-mono text-[10px] text-[#FFD700] uppercase tracking-widest">Event_Date_</label>
-                <input type="date" value={eventForm.date}
-                  onChange={(e) => setEventForm(p => ({ ...p, date: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 px-5 py-4 text-white focus:border-[#FFD700] focus:outline-none transition-all font-bold" required />
-              </div>
-              <button type="submit" disabled={loading.event}
-                className="w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/20 text-white py-5 font-black uppercase tracking-widest transition-all disabled:opacity-50">
-                <Calendar className="w-5 h-5 text-[#FFD700]" />
-                <span className="bebas text-2xl italic">
-                  {loading.event ? 'MENYIMPAN...' : 'UPDATE CALENDAR'}
-                </span>
-              </button>
-            </form>
+            <SectionTitle icon={Calendar}>TAMBAH / UPDATE KEGIATAN</SectionTitle>
+            <EventManager showToast={showToast} />
           </div>
 
           <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent mb-20" />
 
-          {/* FORM 4: Gallery & Album Management (UPDATED) */}
+          {/* SECTION 4: Gallery */}
           <div>
             <GalleryManager
               albums={albums}
@@ -919,7 +983,7 @@ const AdminPanel = () => {
         {/* Console */}
         <div className="mt-12 bg-black/80 p-6 border border-white/5 font-mono text-[11px] text-white/40 shadow-inner space-y-2">
           <div className="flex gap-4"><span className="text-[#FFD700]">[SYSTEM]</span><span>Supabase connection established.</span></div>
-          <div className="flex gap-4"><span className="text-blue-500">[STORAGE]</span><span>Buckets: gallery/ & logos/ ready.</span></div>
+          <div className="flex gap-4"><span className="text-blue-500">[STORAGE]</span><span>Buckets: gallery/ &amp; logos/ ready.</span></div>
           <div className="flex gap-4"><span className="text-green-500">[AUTH]</span><span>{user.email} authenticated via Supabase Auth.</span></div>
         </div>
       </div>

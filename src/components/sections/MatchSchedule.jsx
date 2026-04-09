@@ -247,6 +247,12 @@ const MatchSchedule = () => {
   const [matches, setMatches] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('upcoming')
+  const [now, setNow] = useState(new Date()) // ✅ satu-satunya 'now'
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 5000) // update tiap 5 detik
+    return () => clearInterval(timer)
+  }, [])
 
   const fetchMatches = async () => {
     const { data, error } = await supabase
@@ -259,34 +265,31 @@ const MatchSchedule = () => {
 
   useEffect(() => {
     fetchMatches()
-
-    // AKTIFKAN REALTIME: Update otomatis saat skor di DB diubah
     const channel = supabase
       .channel('realtime_matches')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
         fetchMatches()
       })
       .subscribe()
-
     return () => supabase.removeChannel(channel)
   }, [])
 
+  const MATCH_DURATION_MS = 4 * 60 * 60 * 1000 // ← pindah ke sini, di luar filter
+
   const results = matches.filter(m => m.finished)
-  const now = new Date()
-  const MATCH_DURATION_MS = 4 * 60 * 60 * 1000 
 
   const ongoing = matches.filter(m => {
     if (m.finished || !m.date_obj) return false
     const matchTime = parseMatchDate(m.date_obj)
     if (!matchTime) return false
-    return matchTime <= now && (now - matchTime) < MATCH_DURATION_MS
+    return matchTime <= now && (now - matchTime) < MATCH_DURATION_MS // ✅ pakai state
   })
 
   const upcoming = matches.filter(m => {
     if (m.finished || !m.date_obj) return false
     const matchTime = parseMatchDate(m.date_obj)
     if (!matchTime) return false
-    return matchTime > now
+    return matchTime > now // ✅ pakai state
   })
 
   const activeMatches = activeTab === 'upcoming' ? upcoming : results
@@ -301,7 +304,7 @@ const MatchSchedule = () => {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-4 h-4 text-[#FFD700]" />
-              <span className="text-[10px] font-mono text-[#FFD700] tracking-[0.4em] uppercase">Race Calendar // 2026</span>
+              <span className="text-[10px] font-mono text-[#FFD700] tracking-[0.4em] uppercase">Match Calendar // 2026</span>
             </div>
             <h2 className="bebas text-6xl md:text-8xl text-white italic leading-none">
               MATCH <span className="text-[#FFD700]">SCHEDULE</span>
@@ -309,7 +312,7 @@ const MatchSchedule = () => {
           </div>
           <div className="flex items-center gap-3 px-4 py-2 border border-white/10 bg-black/40 skew-x-[-10deg]">
             <Database className="w-3 h-3 text-[#FFD700] skew-x-[10deg]" />
-            <span className="text-[10px] font-black italic text-white skew-x-[10deg] tracking-widest uppercase">COnn</span>
+            <span className="text-[10px] font-black italic text-white skew-x-[10deg] tracking-widest uppercase">Connected</span>
           </div>
         </div>
 
